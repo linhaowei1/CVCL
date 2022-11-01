@@ -14,6 +14,7 @@ do
         --baseline 'HAT' \
         --seed ${seed[$round]} \
         --batch_size 512 \
+        --eval_during_training \
         --sequence_file 'C10_5T' \
         --learning_rate 0.001 \
         --num_train_epochs 100 \

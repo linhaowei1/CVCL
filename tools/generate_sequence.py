@@ -3,7 +3,7 @@ import random
 M_5T = ['M-5T-{}'.format(i) for i in range(5)]
 C10_5T = ['C10-5T-{}'.format(i) for i in range(5)]
 C100_20T = ['C100-20T-{}'.format(i) for i in range(20)]
-C100_10T = ['C10-10T-{}'.format(i) for i in range(10)]
+C100_10T = ['C100-10T-{}'.format(i) for i in range(10)]
 T_5T = ['T-5T-{}'.format(i) for i in range(5)]
 T_10T = ['T-10T-{}'.format(i) for i in range(10)]
 

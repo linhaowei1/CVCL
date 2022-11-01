@@ -45,7 +45,7 @@ def get_dataset(args):
 
         print('dataset_name: ', dataset_name)
 
-        if 'C10' in dataset_name:
+        if 'C10-5T' in dataset_name:
             DATA_PATH = os.path.join(args.base_dir, 'cifar10')
             task_id = int(dataset_name.split('-')[-1])
             args.total_class = 10
@@ -56,9 +56,25 @@ def get_dataset(args):
                 [args.class_num * task_id + i for i in range(args.class_num)]
             )
             data[t]['test'] = get_subclass_dataset(
-                datasets.CIFAR10(DATA_PATH, train=True, download=True, transform=test_transform), 
+                datasets.CIFAR10(DATA_PATH, train=False, download=False, transform=test_transform), 
                 [args.class_num * task_id + i for i in range(args.class_num)]
             )
+        
+        elif 'C100-' in dataset_name:
+            DATA_PATH = os.path.join(args.base_dir, 'cifar100')
+            task_id = int(dataset_name.split('-')[-1])
+            args.total_class = 100
+            args.class_num = int(args.total_class / args.ntasks)
+            train_transform, test_transform = get_transform(args)
+            data[t]['train'] = get_subclass_dataset(
+                datasets.CIFAR100(DATA_PATH, train=True, download=True, transform=train_transform), 
+                [args.class_num * task_id + i for i in range(args.class_num)]
+            )
+            data[t]['test'] = get_subclass_dataset(
+                datasets.CIFAR100(DATA_PATH, train=False, download=False, transform=test_transform), 
+                [args.class_num * task_id + i for i in range(args.class_num)]
+            )
+
         else:
             raise NotImplementedError
 
