@@ -149,7 +149,7 @@ class ResNet(nn.Module):
         out = out * mask.expand_as(out)
         return out
 
-    def forward(self, t, x, s=1):
+    def forward(self, t, x, s=1, output_hidden=False):
         out_list = []
         msk = []
 
@@ -179,14 +179,16 @@ class ResNet(nn.Module):
         # out = self.layer4(out)
 
         # out = F.avg_pool2d(x, 4)
-        out = x.view(x.size(0), -1)
+        hidden = x.view(x.size(0), -1)
 
-        out = self.last[t](out)
+        out = self.last[t](hidden)
         # y = []
         # for c in range(10):
         #     y.append(self.last[c](out))
-
-        return out, list(itertools.chain(*msk))
+        if output_hidden:
+            return out, list(itertools.chain(*msk)), hidden
+        else:
+            return out, list(itertools.chain(*msk))
         # return y, list(itertools.chain(*msk))
 
 

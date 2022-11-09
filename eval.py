@@ -6,12 +6,12 @@ from accelerate.utils import set_seed
 import os
 from dataloader.data import get_dataset
 from torch.utils.data import DataLoader
-from approaches.train import Appr
+from approaches.eval import Appr
 
 logger = logging.getLogger(__name__)
 
 args = config.parse_args()
-args = utils.prepare_sequence_train(args)
+args = utils.prepare_sequence_eval(args)
 
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 accelerator = Accelerator(mixed_precision=args.mixed_precision,
@@ -35,12 +35,15 @@ accelerator.wait_for_everyone()
 dataset = get_dataset(args)
 model = utils.lookfor_model(args)
 
-train_loader = DataLoader(dataset[args.task]['train'], batch_size=args.batch_size, shuffle=True, num_workers=8)
 test_loaders = []
+train_loaders = []
 for eval_t in range(args.task + 1):
     test_dataset = dataset[eval_t]['test']
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size)
     test_loaders.append(test_dataloader)
+    train_dataset = dataset[eval_t]['replay']
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
+    train_loaders.append(train_dataloader)
 
 appr = Appr(args)
-appr.train(model, train_loader, test_loaders, accelerator)
+appr.eval(model, train_loaders, test_loaders, accelerator)

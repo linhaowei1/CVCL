@@ -11,14 +11,13 @@ do
         CUDA_VISIBLE_DEVICES=0 python main.py \
         --task ${ft_task} \
         --idrandom ${idrandom} \
-        --baseline 'HAT' \
+        --baseline 'HAT_C10_5T' \
         --seed ${seed[$round]} \
-        --batch_size 512 \
+        --batch_size 128 \
         --eval_during_training \
         --sequence_file 'C10_5T' \
-        --learning_rate 0.001 \
-        --num_train_epochs 100 \
-        --fp16 \
+        --learning_rate 0.1 \
+        --num_train_epochs 200 \
         --base_dir /data/haowei/haowei/data
       done
   done
