@@ -5,14 +5,14 @@ import torch.nn as nn
 import os
 import shutil
 import torch
-from networks.baseline import HAT
 import numpy as np
 import logging
 import math
 from transformers import get_scheduler
-from networks.baseline.HAT import Adam
-from networks.baseline.HAT import SGD_hat as SGD
-from utils import utils
+from torch.optim import Adam
+from utils.sgd_hat import SGD_hat as SGD
+from utils.sgd_hat import HAT_reg, compensation, compensation_clamp
+from utils import utils, mixup
 logger = logging.getLogger(__name__)
 
 class Appr(object):
@@ -22,34 +22,14 @@ class Appr(object):
         self.args = args
         self.cross_entropy = nn.CrossEntropyLoss()
 
-    def train(self, model, train_loader, test_loaders, accelerator):
+    def train(self, model, train_loader, test_loaders, replay_loaders, accelerator):
         
-        no_decay = ["bias", "LayerNorm.weight"]
         # Optimizer
         # Split weights in two groups, one with weight decay and the other not.
 
-        no_decay = ["bias", "LayerNorm.weight"]
-        special_lr = []
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in model.named_parameters() if
-                           not any(nd in n for nd in no_decay) and p.requires_grad and not any(
-                               nd in n for nd in special_lr)],
-                "weight_decay": self.args.weight_decay,
-                "lr": self.args.learning_rate
-            },
-            {
-                "params": [p for n, p in model.named_parameters() if
-                           any(nd in n for nd in no_decay) and p.requires_grad and not any(
-                               nd in n for nd in special_lr)],
-                "weight_decay": 0.0,
-                "lr": self.args.learning_rate
-            },
-        ]
-
-        if 'HAT' in self.args.baseline:
-            optimizer = SGD(optimizer_grouped_parameters, lr=self.args.learning_rate, momentum=0.9, weight_decay=5e-4, nesterov=True)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args.num_train_epochs)
+        if 'more' in self.args.baseline:
+            optimizer = SGD(model.adapter_parameters(), lr=self.args.learning_rate, momentum=0.9, weight_decay=5e-4, nesterov=True)
+            #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args.num_train_epochs)
 
         # Scheduler and math around the number of training steps.
         num_update_steps_per_epoch = math.ceil(len(train_loader) / self.args.gradient_accumulation_steps)
@@ -57,11 +37,6 @@ class Appr(object):
             self.args.max_train_steps = self.args.num_train_epochs * num_update_steps_per_epoch
         else:
             self.args.num_train_epochs = math.ceil(self.args.max_train_steps / num_update_steps_per_epoch)
-
-        if self.args.warmup_ratio:
-            self.args.num_warmup_steps=self.get_warmup_steps(self.args.max_train_steps)
-
-            print('self.args.num_warmup_steps: ',self.args.num_warmup_steps)
 
         model, train_loader = accelerator.prepare(model, train_loader)
 
@@ -95,24 +70,36 @@ class Appr(object):
             model.train()
 
             for step, batch in enumerate(train_loader):
-
-                if 'HAT' in self.args.baseline:
+                normed_label = batch[1] - self.args.class_num * self.args.task
+                soft_label = torch.Tensor(normed_label.shape[0], self.args.class_num).to(accelerator.device)
+                for i, label in enumerate(normed_label):
+                    if label < 0 or label >= self.args.class_num:
+                        soft_label[i].fill_(1 / self.args.class_num)
+                    else:
+                        soft_label[i] = nn.functional.one_hot(label, self.args.class_num).float().to(accelerator.device)
+                
+                if 'more' in self.args.baseline:
                     s = (self.args.smax - 1 / self.args.smax) * step / len(
                         train_loader) + 1 / self.args.smax
-                    outputs, masks = model(t=self.args.task, x=batch[0], s=s)
-                    loss = self.cross_entropy(outputs, batch[1] - self.args.class_num * self.args.task)
-                    loss += HAT.HAT_reg(self.args, masks)
+                    index, lam = mixup.prepare_mixup(batch[0].shape[0], self.args.alpha)
+                    data_mix = mixup.mixing(batch[0], index, lam)
+                    soft_label_mix = mixup.mixing(soft_label, index, lam)
+                    features, masks = model.forward_features(self.args.task, data_mix, s=s)
+                    outputs = model.forward_classifier(self.args.task, features)
+                    loss = mixup.soft_cross_entropy(outputs, soft_label_mix)
+                    loss += HAT_reg(self.args, masks)
                 
                 accelerator.backward(loss)
 
                 if step % self.args.gradient_accumulation_steps == 0 or step == len(train_loader) - 1:
-                    if 'HAT' in self.args.baseline:    
-                        HAT.compensation(model, self.args, thres_cosh=self.args.thres_cosh, s=s)
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), self.args.clipgrad)
+                    if 'more' in self.args.baseline:
+                        compensation(model, self.args, thres_cosh=self.args.thres_cosh, s=s)
+                        #torch.nn.utils.clip_grad_norm_(model.parameters(), self.args.clipgrad)
                         optimizer.step(hat=(self.args.task > 0))
-                        HAT.compensation_clamp(model, thres_emb=6)
+                        compensation_clamp(model, thres_emb=6)
                     else:
-                        optimizer.step()
+                        raise NotImplementedError
+                        #optimizer.step()
 
                     optimizer.zero_grad()
                     progress_bar.update(1)
@@ -120,7 +107,7 @@ class Appr(object):
                     progress_bar.set_description(
                         'Train Iter (Epoch=%3d,loss=%5.3f)' % ((epoch, loss.item())))  # show the loss, mean while
             
-            scheduler.step()
+            #scheduler.step()
             
             if self.args.eval_during_training:
                 results = self.eval(model, test_loaders, accelerator, eval_t=self.args.task)
@@ -133,6 +120,7 @@ class Appr(object):
             if completed_steps >= self.args.max_train_steps: break
         
         unwrapped_model = accelerator.unwrap_model(model)
+        # ---- end replay tunning ---- #
         after_train.compute(self.args, unwrapped_model, accelerator)
         accelerator.wait_for_everyone()
 
@@ -162,8 +150,10 @@ class Appr(object):
             task_label = []
             for _, batch in enumerate(dataloader):
                 with torch.no_grad():
-                    output, _ = model(task_mask, batch[0], s=self.args.smax)
-                    score, prediction = torch.max(torch.softmax(output, dim=1), dim=1)
+
+                    features, masks = model.forward_features(task_mask, batch[0], s=self.args.smax)
+                    outputs = model.forward_classifier(task_mask, features)
+                    score, prediction = torch.max(torch.softmax(outputs, dim=1), dim=1)
 
                     # for ddp
                     score = accelerator.gather(score)
@@ -199,4 +189,3 @@ class Appr(object):
             'TP_accuracy': round(TP_accuracy, 4)
         }
         return results
-            

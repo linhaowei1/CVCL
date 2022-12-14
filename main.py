@@ -37,10 +37,15 @@ model = utils.lookfor_model(args)
 
 train_loader = DataLoader(dataset[args.task]['train'], batch_size=args.batch_size, shuffle=True, num_workers=8)
 test_loaders = []
+replay_loaders = []
+
 for eval_t in range(args.task + 1):
     test_dataset = dataset[eval_t]['test']
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size)
+    #replay_dataset = dataset[eval_t]['replay']
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=8)
+    #replay_dataloader = DataLoader(replay_dataset, batch_size=args.batch_size)
     test_loaders.append(test_dataloader)
+    #replay_loaders.append(replay_dataloader)
 
 appr = Appr(args)
-appr.train(model, train_loader, test_loaders, accelerator)
+appr.train(model, train_loader, test_loaders, replay_loaders, accelerator)

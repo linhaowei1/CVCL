@@ -4,17 +4,23 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--baseline', type=str)
-    parser.add_argument('--K', type=int, default=50)
+    parser.add_argument('--K', type=int, default=5)
     parser.add_argument('--task', type=int, default=0)
     parser.add_argument('--idrandom', type=int, default=0)
+    parser.add_argument('--replay_epoch', type=int, default=10)
+    parser.add_argument('--alpha', type=float, default=0.2)
+    parser.add_argument('--cmg', action='store_true')
+    parser.add_argument('--training', action='store_true')
+    parser.add_argument('--ood_head', action='store_true')
     parser.add_argument('--base_dir', type=str, default='/data/haowei')
     parser.add_argument('--mixed_precision',type=str)
     parser.add_argument("--sequence_file",type=str, help="sequence file")
     parser.add_argument('--fp16', action='store_true')
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
-    parser.add_argument("--smax", default=600, type=int, help="smax")
+    parser.add_argument("--smax", default=400, type=int, help="smax")
     parser.add_argument('--warmup_ratio',  type=float)
-    parser.add_argument('--replay_buffer_size', type=int)
+    parser.add_argument('--replay_buffer_size', type=int, default=200)
+    parser.add_argument('--latent', type=int, default=64)
     parser.add_argument('--eval_during_training', action="store_true")
     parser.add_argument(
         "--learning_rate",
@@ -39,7 +45,7 @@ def parse_args():
         help="Total number of training steps to perform. If provided, overrides num_train_epochs.",
     )
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
-    parser.add_argument("--clipgrad", type=int, default=10)
+    parser.add_argument("--clipgrad", type=float, default=1.0)
     parser.add_argument('--thres_cosh',default=50,type=int,required=False,help='(default=%(default)d)')
     parser.add_argument(
         "--gradient_accumulation_steps",

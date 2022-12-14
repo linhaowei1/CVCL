@@ -39,10 +39,10 @@ test_loaders = []
 train_loaders = []
 for eval_t in range(args.task + 1):
     test_dataset = dataset[eval_t]['test']
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=8)
     test_loaders.append(test_dataloader)
-    train_dataset = dataset[eval_t]['replay']
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
+    train_dataset = dataset[eval_t]['train']
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False, num_workers=8)
     train_loaders.append(train_dataloader)
 
 appr = Appr(args)

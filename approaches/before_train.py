@@ -2,15 +2,10 @@ import os
 import torch
 def prepare(args, model, accelerator):
 
-    if 'HAT' in args.baseline:
+    if 'more' in args.baseline:
         args.mask_pre = None
         args.mask_back = None
-        if 'C10_5T' in args.baseline:
-            args.reg_lambda = 1.0 if args.task == 0 else 0.75
-        elif 'C100_10T' in args.baseline:
-            args.reg_lambda = 1.5 if args.task == 0 else 1.0
-        elif 'C100_20T' in args.baseline:
-            args.reg_lambda = 3.5 if args.task == 0 else 2.5
+        args.reg_lambda = 0.75
         if args.task > 0:
             print('load mask matrix ....')
             args.mask_pre = torch.load(os.path.join(args.prev_output, 'mask_pre'), map_location='cpu')
